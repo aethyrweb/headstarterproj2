@@ -1,4 +1,4 @@
-'use client'
+'use client';
 
 import { useState, useEffect } from 'react';
 import { firestore } from '@/firebase';
@@ -15,21 +15,33 @@ export default function Home() {
     try {
       const snapshot = query(collection(firestore, 'inventory'));
       const docs = await getDocs(snapshot);
-      const inventoryList = [];
+      const inventoryMap = new Map();
+  
       docs.forEach((doc) => {
-        inventoryList.push({ name: doc.id, ...doc.data() });
+        const data = doc.data();
+        const quantity = Number(data.quantity) || 0;
+        const itemName = doc.id.charAt(0).toUpperCase() + doc.id.slice(1);
+        if (quantity > 0) { // Only include items with a positive quantity
+          if (inventoryMap.has(itemName)) {
+            inventoryMap.set(itemName, inventoryMap.get(itemName) + quantity);
+          } else {
+            inventoryMap.set(itemName, quantity);
+          }
+        }
       });
-      console.log("Updated Inventory:", inventoryList); // Debugging statement
+  
+      const inventoryList = Array.from(inventoryMap, ([name, quantity]) => ({ name, quantity }));
       setInventory(inventoryList);
     } catch (error) {
       console.error("Error updating inventory:", error);
     }
   };
-
+  
   const addItem = async (item) => {
-    if (item.trim() === "") return; // Prevent adding empty items
+    if (item.trim() === "") return;
+    const itemName = item.toLowerCase(); // Convert item name to lowercase
     try {
-      const docRef = doc(collection(firestore, 'inventory'), item);
+      const docRef = doc(collection(firestore, 'inventory'), itemName);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const { quantity } = docSnap.data();
@@ -37,16 +49,16 @@ export default function Home() {
       } else {
         await setDoc(docRef, { quantity: 1 });
       }
-      console.log(`Added item: ${item}`); // Debugging statement
       await updateInventory();
     } catch (error) {
       console.error("Error adding item:", error);
     }
   };
-
+  
   const removeItem = async (item) => {
+    const itemName = item.toLowerCase(); // Convert item name to lowercase
     try {
-      const docRef = doc(collection(firestore, 'inventory'), item);
+      const docRef = doc(collection(firestore, 'inventory'), itemName);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const { quantity } = docSnap.data();
@@ -55,7 +67,6 @@ export default function Home() {
         } else {
           await setDoc(docRef, { quantity: quantity - 1 });
         }
-        console.log(`Removed item: ${item}`); // Debugging statement
         await updateInventory();
       }
     } catch (error) {
@@ -68,7 +79,12 @@ export default function Home() {
   }, []);
 
   const handleOpen = () => setOpen(true);
-  const handleClose = () => setOpen(false);
+
+  const handleClose = () => {
+    setItemName('');
+    setOpen(false);
+  };
+
   const handleSearch = (e) => setSearchTerm(e.target.value);
 
   const filteredInventory = inventory.filter((item) =>
@@ -117,7 +133,6 @@ export default function Home() {
             <Button
               variant="outlined"
               onClick={() => {
-                console.log(`Adding item: ${itemName}`); // Debugging statement
                 addItem(itemName);
                 setItemName('');
                 handleClose();
@@ -171,11 +186,12 @@ export default function Home() {
               </Box>
             ))
           ) : (
-            <Typography variant="h6" color="#333" textAlign="center">
+            <Typography variant="h5" color="#666" textAlign="center">
               No items available
             </Typography>
           )}
         </Stack>
       </Box>
     </Box>
-  )};
+  );
+}
